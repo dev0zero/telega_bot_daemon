@@ -1,0 +1,5 @@
+*.yaml
+/.idea
+.DS_Store
+/sandbox
+*.session

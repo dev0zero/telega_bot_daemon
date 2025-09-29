@@ -1,0 +1,37 @@
+
+cgrab_prod:
+  api_id: api_id_as_int
+  api_hash: "unique_token_for_telethon_library_from_telegram_apps"
+  session_name: "unique_name_for_session_name"
+cgrab_test:
+  api_id: api_id_as_int
+  api_hash: "unique_token_for_telethon_library_from_telegram_apps"
+  session_name: "unique_name_for_session_name"
+sleeptimer:
+  # timer for delay
+  5sec: 5
+  10sec: 10
+  30sec: 30
+workingdir: "folder_where_is_keep_temp_or_permanent_files"
+database:
+  host: here_is_db_ip_or_hostname
+  database: "here_is_dbname"
+  user: "here_is_db_username"
+  password: "here_is_db_password"
+  port: 10000
+  charset: 'utf8mb4'
+priveleges:
+  None: 0
+  User: 1
+  Moderator: 2
+  Admin: 3
+admin_users:
+  admin_name: admin_id_as_int
+allowed_chats:
+  # name_chat: <name_of_chat_instead_of_id>
+  chat_name: chat_id_as_int
+  my_chat_name_aaa: 00001120130
+ai_api_data:
+  google:
+    api_key:  "here_is_unique_api_token_code"
+    model_name: "ai_model_name_for_example_gemini_2_5_pro"

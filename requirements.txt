@@ -1,0 +1,15 @@
+# libraries
+telethon~=1.40.0
+typing~=3.7.4.3
+protobuf~=5.29.5
+rsa~=4.9.1
+mysql-connector-python~=9.3.0
+google.generativeai
+pandas
+pymysql
+matplotlib
+psutil
+tabulate
+pyyaml
+seaborn
+networkx
