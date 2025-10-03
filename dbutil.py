@@ -18,7 +18,7 @@ class Mysqldatabase:
                 charset=c.CHARSET,
             )
             if self.connection.is_connected():
-                print("Успешное подключение к базе данных.")
+                print("✅ Успешное подключение к базе данных.")
         except Error as e:
             print(f"Ошибка подключения: {e}")
 

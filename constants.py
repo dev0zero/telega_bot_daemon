@@ -3,9 +3,7 @@ import yaml
 # yaml separated file need for ignore it for git-github to do not save private data
 
 DEBUG = True # FOR DEBUGGING VIEW
-
 REVERSING = False
-
 
 if DEBUG:
     CONF = os.path.join(os.path.expanduser('~'), 'PycharmProjects', 'Telega', 'conf_data.yaml')
@@ -27,6 +25,8 @@ else:
     API_HASH = config['cgrab_test']['api_hash']
     SESSION_NAME = config['cgrab_test']['session_name']
 
+
+# TODO: Зделать выборку, какие api использовать
 # data for gemini
 GOOGLE_API_KEY = config['ai_api_data']['google']['api_key']
 GOOGLE_MODEL_NAME = config['ai_api_data']['google']['model_name']
@@ -39,55 +39,43 @@ PASSWORD = config['database']['password']
 PORT = config['database']['port']
 CHARSET = config['database']['charset']
 
-
 SLEEPTIMER = config['sleeptimer']
 WORKINGDIR = config['workingdir']
 # TODO: create folder, if not exist
 
+# тут мы устанавливаем привелегии установленым пользователям
+# привелегии даются по ссылкам которые указанны в yaml файле
+# не обходимо установить тут, потому, что тут иницилизиуются привелегии
 
-PRIV = {
-    'lvl0': config['priveleges']['None'],
-    'lvl1': config['priveleges']['User'],
-    'lvl2': config['priveleges']['Moderator'],
-    'lvl3': config['priveleges']['Admin'],
-}
+ADMINS = config['admini_users']
+PRIVILEGES = config['priveleges']
+ALLOWED_CHATS = config['chats_allowed']
+COMMANDSS = config['commands']
 
-# использовать цикл для этого
-ALLOWED_CHAT_IDS = {
-    config['allowed_chats']['music_here']: PRIV['lvl3'],
-    config['allowed_chats']['fiesta_club']: PRIV['lvl1'],
-    config['allowed_chats']['test_chat']: PRIV['lvl1'],
-    config['allowed_chats']['my_recs']: PRIV['lvl2'],
-    config['allowed_chats']['local']: PRIV['lvl2'],
-    #config['allowed_chats']['voenij_osvedomitel']: PRIV['lvl0']
-}
+print(COMMANDSS)
 
-ADMIN_USERS = config['admin_users'].values()
+# Инициализируем привелегии указанных пользователей указанные пользователем
+for k, v in ADMINS.items():
+    for key, value in PRIVILEGES.items():
+        if ADMINS[k]['level_id'] == key:
+            ADMINS[k]['level_id'] = value
+            break
 
-COMMANDS = {
-    'help_cmd': {
-        'command': '/help',
-        'privileges': PRIV['lvl1']
-    },
-    'list_chats_cmd': {
-        'command': '/list_chats',
-        'privileges': PRIV['lvl3']
-    },
-    'gpt_cmd': {
-        'command': '/ask',
-        'privileges': PRIV['lvl1']
-    },
-    'status_cmd': {
-        'command': '/status',
-        'privileges': PRIV['lvl2']
-    },
-    'status_serv_cmd': {
-        'command': '/server_status',
-        'privileges': PRIV['lvl2']
-    },
-    # FOR BETA TESTER
-    'stats_cmd': {
-        'command': '/statistica',
-        'privileges': PRIV['lvl1']
-    },
-}
+# Устанавливаем уровни привелегий
+privileges_levels = {}
+for i,v in PRIVILEGES.items():
+    privileges_levels[f"lvl{v}"] = v
+
+
+# Иницилизируем привелегии чатов которые указанны пользователем в ручную
+for key, values in ALLOWED_CHATS.items():
+    for kay, value in PRIVILEGES.items():
+        if ALLOWED_CHATS[key]['level_id'] == kay:
+            ALLOWED_CHATS[key]['level_id'] = value
+            break
+
+# Инициализируем привелееии для всех команд
+for k, v in COMMANDSS.items():
+    for key, values in PRIVILEGES.items():
+        if COMMANDSS[k]['privileges'] == key:
+            COMMANDSS[k]['privileges'] = values
