@@ -5,7 +5,11 @@ import yaml
 DEBUG = True # FOR DEBUGGING VIEW
 REVERSING = False
 
-if DEBUG:
+DEBUG_PATH = True
+
+SAVE_MESSAGES_TO_DB = True
+
+if DEBUG_PATH:
     CONF = os.path.join(os.path.expanduser('~'), 'PycharmProjects', 'Telega', 'conf_data.yaml')
 else:
     CONF = os.path.join(os.path.expanduser('~'), 'Telega', 'conf_data.yaml')
@@ -52,8 +56,6 @@ PRIVILEGES = config['priveleges']
 ALLOWED_CHATS = config['chats_allowed']
 COMMANDSS = config['commands']
 
-print(COMMANDSS)
-
 # Инициализируем привелегии указанных пользователей указанные пользователем
 for k, v in ADMINS.items():
     for key, value in PRIVILEGES.items():
@@ -65,7 +67,6 @@ for k, v in ADMINS.items():
 privileges_levels = {}
 for i,v in PRIVILEGES.items():
     privileges_levels[f"lvl{v}"] = v
-
 
 # Иницилизируем привелегии чатов которые указанны пользователем в ручную
 for key, values in ALLOWED_CHATS.items():

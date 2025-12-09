@@ -18,7 +18,7 @@ class Mysqldatabase:
                 charset=c.CHARSET,
             )
             if self.connection.is_connected():
-                print("✅ Успешное подключение к базе данных.")
+                print("✅ Бот подключился к базе данных.")
         except Error as e:
             print(f"Ошибка подключения: {e}")
 
@@ -34,9 +34,9 @@ class Mysqldatabase:
         :param table: Название таблицы.
         :param data: Словарь с ключами-столбцами и значениями.
         """
-        global cursor
         if not self.connection or not self.connection.is_connected():
             raise ConnectionError("Сначала вызовите connect()")
+
         columns = ', '.join(data.keys())
         placeholders = ', '.join(['%s'] * len(data))
         values = tuple(data.values())
@@ -51,7 +51,7 @@ class Mysqldatabase:
         except Error as e:
             print(f"Ошибка при вставке данных: {e}")
         finally:
-            cursor.close()
+            self.close()
 
     # Тут получаем ID пользователя для дальнейшей работы с его данными в базе данны
     # к примеру поиск по nickname или firstname и получаем telegram ID
@@ -64,18 +64,24 @@ class Mysqldatabase:
 
 
     def get_all_saved_user_ids(self):
-        query = f"SELECT `telegram_id`,`nickname`  FROM `users`"
+
         if not self.connection or not self.connection.is_connected():
             raise ConnectionError("Сначала вызовите connect()")
-        cursor = self.connection.cursor()
+
         result = None
+
         try:
+            cursor = self.connection.cursor()
+            query = f"SELECT `telegram_id`,`nickname`  FROM `users`"
             cursor.execute(query)
             rows = cursor.fetchall()
             if rows is not None:
                 result = rows
         except Error as e:
             print(f'Ошибка получения: {e}')
+        finally:
+            self.close()
+
         return result
 
     def get_dates(self, chat_id=None, user_id=None):
@@ -84,31 +90,34 @@ class Mysqldatabase:
             print("chat_id не указан в поиске да")
             return None
         elif not self.connection or not self.connection.is_connected():
-            print("Сначала вызовите connect()")
-            return None
+            raise ConnectionError("Сначала вызовите connect()")
 
         dates = []
         params = [chat_id]
-        cursor = self.connection.cursor()
+
         query = "SELECT chat_id, MIN(message_date) AS first_date, MAX(message_date) AS last_date FROM messages WHERE chat_id = %s"
 
         if user_id is not None:
             query += " AND user_id = %s"
             params.append(user_id)
         try:
+            cursor = self.connection.cursor(dictionary=True)
             cursor.execute(query, params)
             dates = cursor.fetchone()
             if len(dates) == 0:
                 raise ConnectionError("даты пустые")
         except Error as e:
             print(e)
+        finally:
+            self.close()
+
         return dates
 
     def fetch_all_comments(self, chat_id=None, user_id=None, from_date=None, to_date=None):
 
         if not self.connection or not self.connection.is_connected():
-            print("Сначала вызовите connect()")
-            return None
+            raise ConnectionError("Сначала вызовите connect()")
+
         result = []
         params = []
         query = """
@@ -162,16 +171,20 @@ class Mysqldatabase:
             cursor = self.connection.cursor(dictionary=True)
             cursor.execute(query, params)
             return cursor.fetchall()
-        except mysql.connector.Error as err:
+        except self.connection.Error as err:
             print(f"Ошибка: {err}")
             return []
+        finally:
+            self.close()
 
+    def add_or_update_user(self, user):
 
+        if not self.connection or not self.connection.is_connected():
+            print("Сначала вызовите connect()")
+            raise ConnectionError("Сначала вызовите connect()")
 
-    def add_or_update_user(self, sql_data):
         try:
-            cursor = self.connection.cursor()
-
+            cursor = self.connection.cursor(dictionary=True)
             query = """
                 INSERT IGNORE INTO users (telegram_id, nickname, firstname, lastname, email, phone)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -182,17 +195,23 @@ class Mysqldatabase:
                     email = VALUES(email)
             """
             cursor.execute(query,
-                           (sql_data['telegram_id'],
-                            sql_data['nickname'],
-                            sql_data['firstname'],
-                            sql_data['lastname'],
-                            sql_data['email'],
-                            sql_data['phone'])
+                           (user['telegram_id'],
+                            user['nickname'],
+                            user['firstname'],
+                            user['lastname'],
+                            user['email'],
+                            user['phone'])
                             )
             self.connection.commit()
 
+
+
         except self.connection.Error as err:
             print(f"Ошибка: {err}")
+        finally:
+            self.close()
+
+
 
 
 

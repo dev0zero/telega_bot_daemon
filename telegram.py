@@ -24,29 +24,43 @@ class TelegramWatcher:
         # подключаемся к базе данных (MySQL)
         self.db = Mysql()
         self.db.connect()
-
         self.dtm = dtm()
         self.gc = graph_creator()
-
         self.aichat = GeminiClient()
+
+
+
 
     async def start(self):
 
         Model = TelegramModel()
 
+        def users_as_proved_chats():
+            # Добавляем всех кто пользователь, чтобы можно записывать текст с приватных сообщений
+            '''
+            r = self.db.get_all_saved_user_ids()
+            print(r[0])
+
+            for i in r:
+                # TODO: установить привелегии каждому пользователю, он идет как чат
+                # либо проверка пользователей не увидит и проигнорирует!!!
+                # Посмотреть что с ID чата у пользователя
+                break
+                #pass
+            '''
+
+            pass
+
         @self.client.on(events.NewMessage())
         async def handler(event):
 
-            bypass_record = c.DEBUG  # не добавляет данных в БД
-
             res = await Model.grant_access(event, bypass_command=True)
-
             dbg = debug()
 
             if res['access'] is False:
                 print('no access')
                 return False
-            elif bypass_record:
+            elif c.DEBUG:
 
                 await dbg.ser(event)
                 print('Skipping adding in to database data! Debugging enabled.')
@@ -57,59 +71,55 @@ class TelegramWatcher:
                 sender_id = event.sender_id
                 chat_username = getattr(chat, 'username', None)
 
-                # Добавляем всех кто пользователь, чтобы можно записывать текст с приватных сообщений
+                if c.SAVE_MESSAGES_TO_DB:
 
-                '''
-                r = self.db.get_all_saved_user_ids()
-                print(r[0])
+                    # тут работа с БД добавляем все, что можно в базу данных
+                    reply_user_id = 0
+                    reply_message_id = 0
 
-                for i in r:
-                    # TODO: установить привелегии каждому пользователю, он идет как чат
-                    # либо проверка пользователей не увидит и проигнорирует!!!
-                    # Посмотреть что с ID чата у пользователя
-                    break
-                    #pass
-                '''
-                # тут работа с БД добавляем все, что можно в базу данных
-                reply_user_id = 0
-                reply_message_id = 0
+                    # проверка, есть ли ответ на чей то комментарий
+                    if event.message.is_reply:
+                        # Получаем объект сообщения, на которое был ответ
+                        replied_msg = await event.message.get_reply_message()
+                        reply_message_id = event.message.reply_to_msg_id
 
-                # проверка, есть ли ответ на чей то комментарий
-                if event.message.is_reply:
-                    # Получаем объект сообщения, на которое был ответ
-                    replied_msg = await event.message.get_reply_message()
-                    reply_message_id = event.message.reply_to_msg_id
+                        if c.DEBUG:
+                            bypass_record = True
+                            print(f"Пользователь ответил на сообщение с ID: {reply_message_id}")
 
+                        if replied_msg and hasattr(replied_msg.from_id, "user_id"):
+                            reply_user_id = replied_msg.from_id.user_id
+                        else:
+                            print("Не удалось получить сообщение, на которое был дан ответ.")
+
+                    sql_data = {
+                        "telegram_id": sender.id,
+                        "nickname": f"{sender.username}" if sender.username else "Нет username",
+                        "firstname": sender.first_name or "",
+                        "lastname": sender.last_name or "",
+                        "email": "",
+                        "phone": sender.phone,
+                    }
+
+                    # Добавление/обновление пользователя
+                    self.db.add_or_update_user(sql_data)
+
+                    self.db.insert_data("messages", {
+                        "message_body": event.message.text,
+                        "message_id": event.message.id,
+                        "chat_id": event.message.chat_id,
+                        "user_id": event.sender_id,
+                        "reply_user_id": reply_user_id,
+                        "reply_message_id": reply_message_id,
+                        "message_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    })
                     if c.DEBUG:
-                        bypass_record = True
-                        print(f"Пользователь ответил на сообщение с ID: {reply_message_id}")
+                        print('msg added')
+                else:
+                    print('save to database disabled!')
 
-                    if replied_msg and hasattr(replied_msg.from_id, "user_id"):
-                        reply_user_id = replied_msg.from_id.user_id
-                    else:
-                        print("Не удалось получить сообщение, на которое был дан ответ.")
+                # Сохранение файлов с чата
 
-                sql_data = {
-                    "telegram_id": sender.id,
-                    "nickname": f"{sender.username}" if sender.username else "Нет username",
-                    "firstname": sender.first_name or "",
-                    "lastname": sender.last_name or "",
-                    "email": "",
-                    "phone": sender.phone,
-                }
-                # Добавление/обновление пользователя
-                self.db.add_or_update_user(sql_data)
-
-                self.db.insert_data("messages", {
-                    "message_body": event.message.text,
-                    "message_id": event.message.id,
-                    "chat_id": event.message.chat_id,
-                    "user_id": event.sender_id,
-                    "reply_user_id": reply_user_id,
-                    "reply_message_id": reply_message_id,
-                    "message_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                })
-                print('msg added')
 
         # Выводит статус сервера, работает или нет
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['status_cmd']['command']))
@@ -157,7 +167,6 @@ class TelegramWatcher:
                     await asyncio.sleep(c.SLEEPTIMER['5sec'])
                     await self.client.delete_messages(event.chat_id, [event.id, reply.id])
 
-            print(res)
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['help_cmd']['command']))
         async def handler(event):
@@ -176,9 +185,6 @@ class TelegramWatcher:
                 # Удаляет сообщение на которое он отреагировал
                 await self.client.delete_messages(event.chat_id, [event.id])
                 await event.respond("Вот список команд...")
-
-                print(help_commands)
-
                 await event.reply(f"{help_commands}")
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['list_chats_cmd']['command']))
@@ -269,7 +275,6 @@ class TelegramWatcher:
 
                 except Exception as e:
                     err_found = f"Ошибка в запросе! {e}"
-                    print(e)
                 finally:
                     pass
 
@@ -293,9 +298,7 @@ class TelegramWatcher:
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['report_cmd']['command']))
         async def handler(event):
-
             #await event.reply()
-
             #reply = await Model.search_user(event, self.db)
             pass
 
