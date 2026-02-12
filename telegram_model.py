@@ -1,5 +1,5 @@
 
-from dbutil import Mysqldatabase as Mysql
+from dbutil import Mdb as Mysql
 import constants as c
 import re
 import psutil
@@ -21,7 +21,6 @@ class TelegramModel:
         allowed_chats = c.ALLOWED_CHATS
         privileges_list = c.PRIVILEGES
         commands_list = c.COMMANDSS
-
         admin_list = c.ADMINS
 
         result = {
@@ -43,7 +42,7 @@ class TelegramModel:
 
         # проверяем есть ли вообще чат в списке
         if chat.id not in ids_chats:# or chat_username not in chat_names:
-            print("not in admin ids")
+            print("chat id is not in allowed list ids")
             return result
         else:
             # пропускаем проверку, если не нужно исполнять команду
@@ -58,7 +57,9 @@ class TelegramModel:
                 break
 
         # Данная проверка нужна для чатов в которые не нужно вообще светить команды
-        if sender_id is not None:
+        if sender_id is None:
+            print("user is not in admins list")
+        else:
             for key, value in admin_list.items():
                 if value.get('user_id') == sender_id:
                     result["user_level"] = value.get('level_id')
@@ -74,12 +75,11 @@ class TelegramModel:
                     result['command'] = command
                     result["command_levels"] = value.get('privileges')
                     break
-        else:
-            print("user not in admins")
+
 
         # Глушим все исполнения от всех пользователей и чатов с установкой Гость!
         if result["chat_level"] == privileges_list['Guest']:
-            print('Guest quit')
+            print('User or Chat is unknown it is -> Guest quit')
             return result
 
         # TODO: посмотреть как это работает
@@ -124,10 +124,10 @@ class TelegramModel:
     """
     Вернуть список команд, доступных для указанного уровня привилегий.
     """
-    def list_сommands(self, commands, user_privilege_level):
+    def list_commands(self, commands, user_privilege_level):
 
-        print(f"Список команд {commands}")
-        print(f"привелегии конкретного пользователя {user_privilege_level}")
+        # print(f"Список команд {commands}")
+        # print(f"привелегии конкретного пользователя {user_privilege_level}")
 
         coms = []
         for key, data in commands.items():
@@ -137,7 +137,6 @@ class TelegramModel:
                 coms.append(f"→ {cmd}")
 
         return "\n".join(coms) if coms else "Нет доступных команд"
-
 
     # Выводит список всех чатов --> сохраненных в телеграме!!!
     async def list_all_chats(self, client):
@@ -155,42 +154,35 @@ class TelegramModel:
             print(all_chats)
         return "\n".join(all_chats)
 
-
-
     async def search_user(self, event, db):
-
         result = {
             'err_message': None,
             'user_name': None,
         }
-
         text = event.raw_text
         found_user = None
-        raw_user_data = None
-
         # Сначала ищем ID (id=число)
         id_match = re.search(r'id=(\d+)', text)
-
         if id_match:
             found_user = int(id_match.group(1))
-
         # Если ID не найден → ищем упоминание @username
         mention_match = re.search(r'@(\w+)', text)
-
         if mention_match:
             found_user = mention_match.group(1)
-
         try:
             if found_user is not None:
-                db.get_userdata_by_id(found_user)
+                user = db.get_userdata_by_id(found_user)
+                if user is None:
+                    raise Exception('Нет данных по пользователю!')
+                result['user_name'] = user
             else:
                 raise Exception('Не определен пользователь')
-
         except Exception as e:
-            result['err_message'] = f"Пользователь не найден. Ошибка {e}"
-
+            error = f"Ошибка {e}"
+            result['err_message'] = error
+        finally:
+            pass
         return result
-
 
     # Данные по серверу ---
     def answer(self):

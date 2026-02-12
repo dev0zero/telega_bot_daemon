@@ -3,9 +3,10 @@ from mysql.connector import Error
 from datetime import datetime
 import constants as c
 
-class Mysqldatabase:
+class Mdb:
     def __init__(self):
-        pass
+
+        self.connection = None
 
     def connect(self):
         """Создание подключения к MySQL."""
@@ -53,14 +54,16 @@ class Mysqldatabase:
         finally:
             self.close()
 
-    # Тут получаем ID пользователя для дальнейшей работы с его данными в базе данны
+    # Тут получаем ID пользователя для дальнейшей работы с его данными в Базе Данных
     # к примеру поиск по nickname или firstname и получаем telegram ID
 
-    def get_userdata_by_id(self, user_id):
+    def get_userdata_by_id(self, user_id=None):
 
         if not self.connection or not self.connection.is_connected():
             raise ConnectionError("Сначала вызовите connect()")
         # TODO:  search user by firstname or telegram id
+        user_id = int(user_id)
+        print(user_id)
 
 
     def get_all_saved_user_ids(self):
@@ -69,7 +72,6 @@ class Mysqldatabase:
             raise ConnectionError("Сначала вызовите connect()")
 
         result = None
-
         try:
             cursor = self.connection.cursor()
             query = f"SELECT `telegram_id`,`nickname`  FROM `users`"
@@ -77,8 +79,11 @@ class Mysqldatabase:
             rows = cursor.fetchall()
             if rows is not None:
                 result = rows
+            else:
+                raise ConnectionError("Выташить пользователей смог")
         except Error as e:
-            print(f'Ошибка получения: {e}')
+            result = f'Ошибка получения: {e}'
+            return result
         finally:
             self.close()
 
@@ -118,7 +123,7 @@ class Mysqldatabase:
         if not self.connection or not self.connection.is_connected():
             raise ConnectionError("Сначала вызовите connect()")
 
-        result = []
+        # result = []
         params = []
         query = """
                 SELECT 

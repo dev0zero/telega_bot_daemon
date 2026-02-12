@@ -1,13 +1,16 @@
 # https://my.telegram.org/apps
 import os
 import asyncio
+
+from traitlets import Bool
+
 import constants as c
 from datetime import datetime
-from askai import GeminiClient
+# from askai import GeminiClient
 from dateutils import DateUtils as dtm
 from graph_creator import graph_creator
 from telegram_model import TelegramModel
-from dbutil import Mysqldatabase as Mysql
+from dbutil import Mdb as Mysql
 from telethon import TelegramClient, events
 from debug import debug
 
@@ -15,64 +18,82 @@ class TelegramWatcher:
     def __init__(self):
 
         # подключение к телеграму
-        self.api_id = c.API_ID
-        self.api_hash = c.API_HASH
-        self.session_name = c.SESSION_NAME
-        self.client = TelegramClient(self.session_name, self.api_id, self.api_hash)
+        self.client = TelegramClient(c.SESSION_NAME, c.API_ID, c.API_HASH)
 
         #self.allowed_chats =c.ALLOWED_CHAT_IDS
         # подключаемся к базе данных (MySQL)
-        self.db = Mysql()
-        self.db.connect()
+
+        if not c.DISABLE_DB:
+            self.db = Mysql()
+            self.db.connect()
+        else:
+            self.db = None
+
         self.dtm = dtm()
         self.gc = graph_creator()
-        self.aichat = GeminiClient()
-
-
-
-
-    async def start(self):
-
-        Model = TelegramModel()
+        # self.aichat = GeminiClient()
+        self.model = TelegramModel()
 
         def users_as_proved_chats():
+
             # Добавляем всех кто пользователь, чтобы можно записывать текст с приватных сообщений
-            '''
             r = self.db.get_all_saved_user_ids()
             print(r[0])
-
             for i in r:
                 # TODO: установить привелегии каждому пользователю, он идет как чат
                 # либо проверка пользователей не увидит и проигнорирует!!!
                 # Посмотреть что с ID чата у пользователя
                 break
                 #pass
-            '''
 
-            pass
+        # users_as_proved_chats()
+
+    async def verify_access(self, event, command, params):
+
+        print(command)
+        print(event)
+
+        res = await self.model.grant_access(event)
+        if not res['access']:
+            if res['message']:
+                answer = f"{res['message']} -> {command}"
+                reply = await event.reply(answer)
+                if params['delete_msg']:
+                    await asyncio.sleep(c.SLEEPTIMER['5sec'])
+                    await self.client.delete_messages(event.chat_id, [event.id, reply.id])
+            return False
+        return True
+
+    async def start(self):
+
+        model = self.model
 
         @self.client.on(events.NewMessage())
         async def handler(event):
 
-            res = await Model.grant_access(event, bypass_command=True)
+            res = await model.grant_access(event, bypass_command=True)
             dbg = debug()
 
-            if res['access'] is False:
-                print('no access')
-                return False
-            elif c.DEBUG:
+            chat = await event.get_chat()
+            sender = await event.get_sender()
+            # sender_id = event.sender_id
+            # chat_username = getattr(chat, 'username', None)
 
-                await dbg.ser(event)
-                print('Skipping adding in to database data! Debugging enabled.')
-                return False
+            if not res['access']:
+                # print(f"no access to chat {chat.id}")
+                return
             else:
-                chat = await event.get_chat()
-                sender = await event.get_sender()
-                sender_id = event.sender_id
-                chat_username = getattr(chat, 'username', None)
+                if c.DEBUG:
+                    await dbg.ser(event)
+                    print('Skipped adding in to DB! Debugging enabled.')
+
+                    print("-------------------------------------------")
+                    print(sender.username)
+                    print(event.message.text)
+
+                    return
 
                 if c.SAVE_MESSAGES_TO_DB:
-
                     # тут работа с БД добавляем все, что можно в базу данных
                     reply_user_id = 0
                     reply_message_id = 0
@@ -83,26 +104,10 @@ class TelegramWatcher:
                         replied_msg = await event.message.get_reply_message()
                         reply_message_id = event.message.reply_to_msg_id
 
-                        if c.DEBUG:
-                            bypass_record = True
-                            print(f"Пользователь ответил на сообщение с ID: {reply_message_id}")
-
                         if replied_msg and hasattr(replied_msg.from_id, "user_id"):
                             reply_user_id = replied_msg.from_id.user_id
                         else:
                             print("Не удалось получить сообщение, на которое был дан ответ.")
-
-                    sql_data = {
-                        "telegram_id": sender.id,
-                        "nickname": f"{sender.username}" if sender.username else "Нет username",
-                        "firstname": sender.first_name or "",
-                        "lastname": sender.last_name or "",
-                        "email": "",
-                        "phone": sender.phone,
-                    }
-
-                    # Добавление/обновление пользователя
-                    self.db.add_or_update_user(sql_data)
 
                     self.db.insert_data("messages", {
                         "message_body": event.message.text,
@@ -113,29 +118,37 @@ class TelegramWatcher:
                         "reply_message_id": reply_message_id,
                         "message_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     })
-                    if c.DEBUG:
-                        print('msg added')
+
+                    # Добавление/обновление пользователя
+                    self.db.add_or_update_user(
+                        {
+                            "telegram_id": sender.id,
+                            "nickname": f"{sender.username}" if sender.username else "",
+                            "firstname": sender.first_name or "",
+                            "lastname": sender.last_name or "",
+                            "email": f"{sender.email}" if sender.email else "",
+                            "phone": f"{sender.phone}" if sender.phone else "",  # sender.phone,
+                        }
+                    )
                 else:
                     print('save to database disabled!')
-
                 # Сохранение файлов с чата
-
 
         # Выводит статус сервера, работает или нет
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['status_cmd']['command']))
         async def handler(event):
 
-            res = await Model.grant_access(event)
+            res = await model.grant_access(event)
             delete_msg = False
-            answer = False
+            answer = None
 
-            if res['access'] is False:
+            if not res['access']:
                 if res['message']:
                     answer = f"{res['message']} -> {c.COMMANDSS['status_cmd']['command']}"
                     delete_msg = True
             else:
                 # Получаем статус сервера и отправляем пользователю
-                answer = f"{Model.answer()}"
+                answer = f"{model.answer()}"
 
             reply = await event.respond(f"{answer}")
 
@@ -146,144 +159,141 @@ class TelegramWatcher:
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['gpt_cmd']['command']))
         async def handler(event):
 
-            res = await Model.grant_access(event)
+            if not await self.verify_access(event, c.COMMANDSS['gpt_cmd']['command'], {"delete_msg": True}):
+                return False
 
+            answer = "Токен и API под ИИ еще не определенны!"
+            reply = await event.reply(answer)
+
+
+            '''
             delete_msg = False
-            answer = False
 
-            if res['access'] is False:
-                if res['message']:
-                    answer = f"{res['message']} -> {c.COMMANDSS['gpt_cmd']['command']}"
-                    delete_msg = True
+            if not event.message.text:
+                answer = f"Нужно что-то спросить! Пример: {c.COMMANDSS['gpt_cmd']['command']} [твой вопрос]!"
             else:
-                if not res['text_body']:
-                    answer = f"Нужно что-то спросить! Пример: {c.COMMANDSS['gpt_cmd']['command']} [твой вопрос]!"
-                else:
-                    answer = self.aichat.ask(res['text_body'])
+                answer = "ask ai a question!"
 
-            if answer:
-                reply = await event.reply(answer)
-                if  delete_msg:
-                    await asyncio.sleep(c.SLEEPTIMER['5sec'])
-                    await self.client.delete_messages(event.chat_id, [event.id, reply.id])
+            # reply = await event.respond(answer)
+            reply = await event.reply(answer)
 
+            if delete_msg:
+                await asyncio.sleep(c.SLEEPTIMER['5sec'])
+                await self.client.delete_messages(event.chat_id, [event.id, reply.id])
+            '''
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['help_cmd']['command']))
         async def handler(event):
 
-            res = await Model.grant_access(event)
+            res = await model.grant_access(event)
 
-            if res['access'] is False:
+            if not res['access']:
                 if res['message']:
                     answer = f"{res['message']} -> {c.COMMANDSS['help_cmd']['command']}"
                     reply = await event.reply(answer)
                     await asyncio.sleep(c.SLEEPTIMER['5sec'])
                     await self.client.delete_messages(event.chat_id, [event.id, reply.id])
-            else:
-                help_commands = Model.list_сommands(c.COMMANDSS, res['user_level'])
+                print(f"no access for {c.COMMANDSS['help_cmd']['command']}")
+                return False
 
-                # Удаляет сообщение на которое он отреагировал
-                await self.client.delete_messages(event.chat_id, [event.id])
-                await event.respond("Вот список команд...")
-                await event.reply(f"{help_commands}")
+            help_commands = self.model.list_commands(c.COMMANDSS, res['user_level'])
+                             # list_сommands(c.COMMANDSS, res['user_level']))
+
+            # Удаляет сообщение на которое он отреагировал
+            await self.client.delete_messages(event.chat_id, [event.id])
+            await event.respond("Вот список команд...")
+            await event.reply(f"{help_commands}")
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['list_chats_cmd']['command']))
         async def handler(event):
 
-            res = await Model.grant_access(event)
+            res = await model.grant_access(event)
 
-            if res['access'] is False:
+            if not res['access']:
                 if res['message']:
                     answer = f"{res['message']} -> {c.COMMANDSS['list_chats_cmd']['command']}"
                     reply = await event.reply(answer)
                     await asyncio.sleep(c.SLEEPTIMER['5sec'])
                     await self.client.delete_messages(event.chat_id, [event.id, reply.id])
-            else:
-                chats = await Model.list_all_chats(self.client)
-                for chunk in Model.split_message(chats):
-                    await event.reply(chunk)
+                return False
+
+            chats = await model.list_all_chats(self.client)
+            for chunk in model.split_message(chats):
+                await event.reply(chunk)
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['stats_cmd']['command']))
         async def handler(event):
 
-            res = await Model.grant_access(event)
+            res = await model.grant_access(event)
 
-            if res['access'] is False:
+            if not res['access']:
                 if res['message']:
                     answer = f"{res['message']} -> {c.COMMANDSS['help_cmd']['command']}"
                     reply = await event.reply(answer)
                     await asyncio.sleep(c.SLEEPTIMER['5sec'])
                     await self.client.delete_messages(event.chat_id, [event.id, reply.id])
-            else:
+                return False
 
-                async def send_graph(event,title1):
-                    if os.path.exists(graph_path):
-                        await self.client.send_file(
-                            entity=event.chat_id,  # может быть ID, username или peer
-                            file=graph_path,  # путь к файлу
-                            caption=title1
-                        )
-                        self.gc.remove_file()
+            async def send_graph(event,title1):
+                if os.path.exists(graph_path):
+                    await self.client.send_file(
+                        entity=event.chat_id,  # может быть ID, username или peer
+                        file=graph_path,  # путь к файлу
+                        caption=title1
+                    )
+                    self.gc.remove_file()
+                else:
+                    print("Не могу найти файл статистики!")
 
+            self.dtm.set_format('%Y-%m-%d')
+
+            graph_path = f"{c.WORKINGDIR}/graph_chart.png"
+
+            self.gc.set_file_dir(graph_path)
+            self.gc.set_chat_id(event.chat_id)
+
+            stri = "Примеры вывода статистики по дням, неделям, месяцам и годам"
+            stri += " today/yesterday/this_week/month/year "
+            stri += " чуть более сокрашенно days:7/weeks:3/months:3/years:1 "
+            stri += " или милималистично d1/w3/m1/y1 "
+
+            today_found = True
+
+            try:
+                lower_text = res['text_body'].lower().split()
+
+                if len(lower_text) < 1:
+                    raise Exception(stri)
+
+                for word in lower_text:
+                    (from_date, to_date) = self.dtm.range(word)
+                    if from_date is None or to_date is None:
+                        raise Exception("некорректные даты")
+
+                    result = self.db.fetch_all_comments(chat_id=event.chat_id, from_date=from_date, to_date=to_date)
+
+                    # Генерация статистики
+                    self.gc.set_data(result)
+                    self.gc.get_comments_graph(from_date=from_date, to_date=to_date)
+
+                    if from_date == to_date and today_found:
+                        title = f"Статистика за сегодняшний день {from_date}"
+                        await send_graph(event, title)
+                        self.gc.view_comments_by_hour()
+                        title = f"По часовая статистика за {to_date}"
+                        await send_graph(event, title)
+                        today_found = False
                     else:
-                        print("Не могу найти файл статистики!")
+                        title = f"Статистика за период: {from_date} - {to_date}"
+                        await send_graph(event, title)
 
-                self.dtm.set_format('%Y-%m-%d')
+            except Exception as e:
+                err_found = f"Ошибка в запросе! {e}"
+                await event.reply(err_found)
+            finally:
+                pass
 
-                graph_path = f"{c.WORKINGDIR}/graph_chart.png"
-
-                self.gc.set_file_dir(graph_path)
-                self.gc.set_chat_id(event.chat_id)
-
-                stri = "Примеры вывода статистики по дням, неделям, месяцам и годам"
-                stri += " today/yesterday/this_week/month/year "
-                stri += " чуть более сокрашенно days:7/weeks:3/months:3/years:1 "
-                stri += " или милималистично d1/w3/m1/y1 "
-
-                err_found = False
-                today_found = True
-                stats_by_user = False
-
-                try:
-                    lower_text = res['text_body'].lower().split()
-
-                    if len(lower_text) < 1:
-                        raise Exception(stri)
-
-                    for word in lower_text:
-                        (from_date, to_date) = self.dtm.range(word)
-                        if from_date is None or to_date is None:
-                            raise Exception("некорректные даты")
-                            break
-
-                        result = self.db.fetch_all_comments(chat_id=event.chat_id, from_date=from_date, to_date=to_date)
-
-                        # Генерация статистики
-                        self.gc.set_data(result)
-                        self.gc.get_comments_graph(from_date=from_date, to_date=to_date)
-
-                        if from_date == to_date and today_found:
-                            title = f"Статистика за сегодняшний день {from_date}"
-                            await send_graph(event, title)
-                            self.gc.view_comments_by_hour()
-                            title = f"По часовая статистика за {to_date}"
-                            await send_graph(event, title)
-                            today_found = False
-                        else:
-                            title = f"Статистика за период: {from_date} - {to_date}"
-                            await send_graph(event, title)
-
-                except Exception as e:
-                    err_found = f"Ошибка в запросе! {e}"
-                finally:
-                    pass
-
-                if err_found:
-                    reply = await event.reply(err_found)
-                    #await asyncio.sleep(c.SLEEPTIMER['5sec'])
-                    #await self.client.delete_messages(event.chat_id, [reply.id])
-
-        @self.client.on(events.NewMessage(pattern="н_л_о n1"))
+        @self.client.on(events.NewMessage(pattern="Какой_то_триггер_который_выводит_сообщение_00001"))
         async def handler(event):
 
             delete_msg = False
@@ -297,16 +307,15 @@ class TelegramWatcher:
                 await self.client.delete_messages(event.chat_id, [r.id, event.id])
 
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['report_cmd']['command']))
-        async def handler(event):
+        async def handler():
             #await event.reply()
             #reply = await Model.search_user(event, self.db)
             pass
-
         '''
         @self.client.on(events.MessageEdited)
         async def handler(event):
-            #event.chat_id = event.chat_id
-            #event.message_id = event.message_id
+            event.chat_id = event.chat_id
+            event.message_id = event.message_id
             # Log the date of new edits
             print('Message', event.id, 'changed at', event.date)
         '''

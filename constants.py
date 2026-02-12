@@ -3,11 +3,10 @@ import yaml
 # yaml separated file need for ignore it for git-github to do not save private data
 
 DEBUG = True # FOR DEBUGGING VIEW
-REVERSING = False
-
+REVERSING = True
 DEBUG_PATH = True
-
 SAVE_MESSAGES_TO_DB = True
+DISABLE_DB = True
 
 if DEBUG_PATH:
     CONF = os.path.join(os.path.expanduser('~'), 'PycharmProjects', 'Telega', 'conf_data.yaml')
@@ -61,7 +60,7 @@ for k, v in ADMINS.items():
     for key, value in PRIVILEGES.items():
         if ADMINS[k]['level_id'] == key:
             ADMINS[k]['level_id'] = value
-            break
+            # break
 
 # Устанавливаем уровни привелегий
 privileges_levels = {}
@@ -73,7 +72,7 @@ for key, values in ALLOWED_CHATS.items():
     for kay, value in PRIVILEGES.items():
         if ALLOWED_CHATS[key]['level_id'] == kay:
             ALLOWED_CHATS[key]['level_id'] = value
-            break
+            # break
 
 # Инициализируем привелееии для всех команд
 for k, v in COMMANDSS.items():

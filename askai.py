@@ -1,5 +1,11 @@
 
 import google.generativeai as genai
+
+from google import genai
+from google.genai import types
+
+# pip install google.genai <---
+
 import constants as c
 import hasher as hsr
 
@@ -50,12 +56,6 @@ class aiAssistent:
     def reset_google_history(self, prompt="Ты дружелюбный помощник."):
         # Сброс истории диалога.
         self.history = [f"System: {prompt}"]
-
-
-
-
-
-
 
 class GeminiClient:
 
