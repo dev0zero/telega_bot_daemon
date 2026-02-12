@@ -50,9 +50,6 @@ class TelegramWatcher:
 
     async def verify_access(self, event, command, params):
 
-        print(command)
-        print(event)
-
         res = await self.model.grant_access(event)
         if not res['access']:
             if res['message']:
@@ -62,7 +59,7 @@ class TelegramWatcher:
                     await asyncio.sleep(c.SLEEPTIMER['5sec'])
                     await self.client.delete_messages(event.chat_id, [event.id, reply.id])
             return False
-        return True
+        return res
 
     async def start(self):
 
@@ -86,7 +83,6 @@ class TelegramWatcher:
                 if c.DEBUG:
                     await dbg.ser(event)
                     print('Skipped adding in to DB! Debugging enabled.')
-
                     print("-------------------------------------------")
                     print(sender.username)
                     print(event.message.text)
@@ -138,17 +134,14 @@ class TelegramWatcher:
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['status_cmd']['command']))
         async def handler(event):
 
-            res = await model.grant_access(event)
             delete_msg = False
-            answer = None
 
-            if not res['access']:
-                if res['message']:
-                    answer = f"{res['message']} -> {c.COMMANDSS['status_cmd']['command']}"
-                    delete_msg = True
-            else:
-                # Получаем статус сервера и отправляем пользователю
-                answer = f"{model.answer()}"
+            res = await self.verify_access(event, c.COMMANDSS['status_cmd']['command'], {"delete_msg": False})
+
+            if not res:
+                return False
+
+            answer = f"{model.answer()}"
 
             reply = await event.respond(f"{answer}")
 
@@ -159,7 +152,9 @@ class TelegramWatcher:
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['gpt_cmd']['command']))
         async def handler(event):
 
-            if not await self.verify_access(event, c.COMMANDSS['gpt_cmd']['command'], {"delete_msg": True}):
+            res = await self.verify_access(event, c.COMMANDSS['gpt_cmd']['command'], {"delete_msg": False})
+
+            if not res:
                 return False
 
             answer = "Токен и API под ИИ еще не определенны!"
@@ -185,19 +180,12 @@ class TelegramWatcher:
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['help_cmd']['command']))
         async def handler(event):
 
-            res = await model.grant_access(event)
+            res = await self.verify_access(event, c.COMMANDSS['help_cmd']['command'], {"delete_msg": False})
 
-            if not res['access']:
-                if res['message']:
-                    answer = f"{res['message']} -> {c.COMMANDSS['help_cmd']['command']}"
-                    reply = await event.reply(answer)
-                    await asyncio.sleep(c.SLEEPTIMER['5sec'])
-                    await self.client.delete_messages(event.chat_id, [event.id, reply.id])
-                print(f"no access for {c.COMMANDSS['help_cmd']['command']}")
+            if not res:
                 return False
 
             help_commands = self.model.list_commands(c.COMMANDSS, res['user_level'])
-                             # list_сommands(c.COMMANDSS, res['user_level']))
 
             # Удаляет сообщение на которое он отреагировал
             await self.client.delete_messages(event.chat_id, [event.id])
@@ -207,14 +195,9 @@ class TelegramWatcher:
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['list_chats_cmd']['command']))
         async def handler(event):
 
-            res = await model.grant_access(event)
+            res = await self.verify_access(event, c.COMMANDSS['list_chats_cmd']['command'], {"delete_msg": False})
 
-            if not res['access']:
-                if res['message']:
-                    answer = f"{res['message']} -> {c.COMMANDSS['list_chats_cmd']['command']}"
-                    reply = await event.reply(answer)
-                    await asyncio.sleep(c.SLEEPTIMER['5sec'])
-                    await self.client.delete_messages(event.chat_id, [event.id, reply.id])
+            if not res:
                 return False
 
             chats = await model.list_all_chats(self.client)
@@ -224,14 +207,9 @@ class TelegramWatcher:
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['stats_cmd']['command']))
         async def handler(event):
 
-            res = await model.grant_access(event)
+            res = await self.verify_access(event, c.COMMANDSS['list_chats_cmd']['command'], {"delete_msg": False})
 
-            if not res['access']:
-                if res['message']:
-                    answer = f"{res['message']} -> {c.COMMANDSS['help_cmd']['command']}"
-                    reply = await event.reply(answer)
-                    await asyncio.sleep(c.SLEEPTIMER['5sec'])
-                    await self.client.delete_messages(event.chat_id, [event.id, reply.id])
+            if not res:
                 return False
 
             async def send_graph(event,title1):
@@ -254,16 +232,16 @@ class TelegramWatcher:
 
             stri = "Примеры вывода статистики по дням, неделям, месяцам и годам"
             stri += " today/yesterday/this_week/month/year "
-            stri += " чуть более сокрашенно days:7/weeks:3/months:3/years:1 "
-            stri += " или милималистично d1/w3/m1/y1 "
-
-            today_found = True
+            stri += " чуть более сокрушенный вариант days:7/weeks:3/months:3/years:1 "
+            stri += " или короткий вариант d1/w3/m1/y1 "
 
             try:
                 lower_text = res['text_body'].lower().split()
 
                 if len(lower_text) < 1:
                     raise Exception(stri)
+
+                today_found = True
 
                 for word in lower_text:
                     (from_date, to_date) = self.dtm.range(word)
