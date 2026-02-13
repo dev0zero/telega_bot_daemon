@@ -48,9 +48,9 @@ class TelegramWatcher:
 
         # users_as_proved_chats()
 
-    async def verify_access(self, event, command, params):
+    async def verify_access(self, event, command, params, bypass_command=False):
 
-        res = await self.model.grant_access(event)
+        res = await self.model.grant_access(event, bypass_command)
         if not res['access']:
             if res['message']:
                 answer = f"{res['message']} -> {command}"
@@ -69,66 +69,67 @@ class TelegramWatcher:
         async def handler(event):
 
             res = await model.grant_access(event, bypass_command=True)
-            dbg = debug()
 
+            if not res['access']:
+                return
+
+            dbg = debug()
             chat = await event.get_chat()
             sender = await event.get_sender()
             # sender_id = event.sender_id
             # chat_username = getattr(chat, 'username', None)
 
-            if not res['access']:
-                # print(f"no access to chat {chat.id}")
+            if c.DEBUG:
+                await dbg.ser(event)
+                print('Skipped adding in to DB! Debugging enabled.')
+                print("-------------------------------------------")
+                print(sender.username)
+                print(event.message.text)
+
                 return
+
+            if not c.SAVE_MESSAGES_TO_DB:
+                print('Save messages in to DB disabled!')
             else:
-                if c.DEBUG:
-                    await dbg.ser(event)
-                    print('Skipped adding in to DB! Debugging enabled.')
-                    print("-------------------------------------------")
-                    print(sender.username)
-                    print(event.message.text)
 
-                    return
+                # тут работа с БД добавляем все, что можно в базу данных
+                reply_user_id = 0
+                reply_message_id = 0
 
-                if c.SAVE_MESSAGES_TO_DB:
-                    # тут работа с БД добавляем все, что можно в базу данных
-                    reply_user_id = 0
-                    reply_message_id = 0
+                # проверка, есть ли ответ на чей то комментарий
+                if event.message.is_reply:
+                    # Получаем объект сообщения, на которое был ответ
+                    replied_msg = await event.message.get_reply_message()
+                    reply_message_id = event.message.reply_to_msg_id
 
-                    # проверка, есть ли ответ на чей то комментарий
-                    if event.message.is_reply:
-                        # Получаем объект сообщения, на которое был ответ
-                        replied_msg = await event.message.get_reply_message()
-                        reply_message_id = event.message.reply_to_msg_id
+                    if replied_msg and hasattr(replied_msg.from_id, "user_id"):
+                        reply_user_id = replied_msg.from_id.user_id
+                    else:
+                        print("Не удалось получить сообщение, на которое был дан ответ.")
 
-                        if replied_msg and hasattr(replied_msg.from_id, "user_id"):
-                            reply_user_id = replied_msg.from_id.user_id
-                        else:
-                            print("Не удалось получить сообщение, на которое был дан ответ.")
+                self.db.insert_data("messages", {
+                    "message_body": event.message.text,
+                    "message_id": event.message.id,
+                    "chat_id": event.message.chat_id,
+                    "user_id": event.sender_id,
+                    "reply_user_id": reply_user_id,
+                    "reply_message_id": reply_message_id,
+                    "message_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                })
 
-                    self.db.insert_data("messages", {
-                        "message_body": event.message.text,
-                        "message_id": event.message.id,
-                        "chat_id": event.message.chat_id,
-                        "user_id": event.sender_id,
-                        "reply_user_id": reply_user_id,
-                        "reply_message_id": reply_message_id,
-                        "message_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    })
+                # Добавление/обновление пользователя
+                self.db.add_or_update_user(
+                    {
+                        "telegram_id": sender.id,
+                        "nickname": f"{sender.username}" if sender.username else "",
+                        "firstname": sender.first_name or "",
+                        "lastname": sender.last_name or "",
+                        "email": f"{sender.email}" if sender.email else "",
+                        "phone": f"{sender.phone}" if sender.phone else "",  # sender.phone,
+                    }
+                )
 
-                    # Добавление/обновление пользователя
-                    self.db.add_or_update_user(
-                        {
-                            "telegram_id": sender.id,
-                            "nickname": f"{sender.username}" if sender.username else "",
-                            "firstname": sender.first_name or "",
-                            "lastname": sender.last_name or "",
-                            "email": f"{sender.email}" if sender.email else "",
-                            "phone": f"{sender.phone}" if sender.phone else "",  # sender.phone,
-                        }
-                    )
-                else:
-                    print('save to database disabled!')
-                # Сохранение файлов с чата
+            # Сохранение файлов с чата
 
         # Выводит статус сервера, работает или нет
         @self.client.on(events.NewMessage(pattern=c.COMMANDSS['status_cmd']['command']))
@@ -208,7 +209,6 @@ class TelegramWatcher:
         async def handler(event):
 
             res = await self.verify_access(event, c.COMMANDSS['list_chats_cmd']['command'], {"delete_msg": False})
-
             if not res:
                 return False
 
@@ -289,14 +289,42 @@ class TelegramWatcher:
             #await event.reply()
             #reply = await Model.search_user(event, self.db)
             pass
-        '''
+
         @self.client.on(events.MessageEdited)
         async def handler(event):
-            event.chat_id = event.chat_id
-            event.message_id = event.message_id
-            # Log the date of new edits
-            print('Message', event.id, 'changed at', event.date)
-        '''
+
+            res = await model.grant_access(event, bypass_command=True)
+
+            if not res['access']:
+                return
+
+            chat = await event.get_chat()
+            sender = await event.get_sender()
+
+            print("----- ОТРЕДАКТИРОВАНО -----")
+            print("Чат:", getattr(chat, 'title', None) or chat.id)
+            print("Пользователь:", getattr(sender, 'username', None) or sender.id)
+            print("Текст:", event.raw_text)
+            print("---------------------------")
+
+            msg = event.message
+
+            # если есть реакции
+            if msg.reactions:
+                for reaction in msg.reactions.results:
+                    emoji = None
+
+                    # обычный эмодзи
+                    if hasattr(reaction.reaction, "emoticon"):
+                        emoji = reaction.reaction.emoticon
+
+                    # кастомный emoji (премиум)
+                    elif hasattr(reaction.reaction, "document_id"):
+                        emoji = f"custom_{reaction.reaction.document_id}"
+
+                    print("Реакция:", emoji)
+                    print("Количество:", reaction.count)
+                    print("Я поставил?:", reaction.chosen)
 
         print("🚀 Бот запущен. Ожидаем сообщения...")
 
