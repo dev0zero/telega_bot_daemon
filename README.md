@@ -30,4 +30,48 @@ code ...
 
 ### после этого делаем его как даемон 
 
-не указано пока
+создаем файл с содержимым
+
+```bash
+sudo nano /etc/systemd/system/myapp.service
+```
+файл даемона 
+```bash
+[Unit]
+Description=My Python App Service
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/myapp
+ExecStart=/usr/bin/python3 /opt/myapp/app.py
+Restart=always
+RestartSec=5
+
+# Если используется venv:
+# ExecStart=/opt/myapp/venv/bin/python app.py
+
+[Install]
+WantedBy=multi-user.target
+```
+
+процедуры с приложением 
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start|stop|restart|status myapp
+journalctl -u myapp -f
+```
+
+автозапуск при старте 
+```bash
+sudo systemctl enable myapp
+sudo systemctl disable myapp
+```
+От корректировать 
+```bash
+sudo adduser myapp
+User=myapp
+ExecStart=/opt/myapp/venv/bin/python app.py
+After=network-online.target
+Wants=network-online.target
+```
