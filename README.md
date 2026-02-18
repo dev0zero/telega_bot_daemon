@@ -1,1 +1,23 @@
-create a virtual environment and install all requirements
+перед запуском нужно установить виртуальную среду и все зависимости 
+
+# Устанавливаем привелегии запуска для main.py 
+chmod +x ./main.py
+
+Установить виртуальную среду со всеми зависимостями 
+
+# для linux и макос 
+python3 -m venv venv
+source venv/bin/activate
+
+# устанавливаем зависимости в виртуальную среду 
+pip -r install requirements.txt
+
+
+чтобы скрипт работал как даемон (ubuntu linux)
+
+прописываем в main.py первой строчкой путь до виртуальной среды в которой запускается скрипт
+
+#!/home/username/path_to_env/venv/bin/python
+code ... 
+
+после этого
