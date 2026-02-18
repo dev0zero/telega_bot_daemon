@@ -1,23 +1,33 @@
 # Перед запуском нужно установить виртуальную среду и все зависимости 
 
 ### Устанавливаем привелегии запуска для main.py 
-```chmod +x ./main.py```
+```bash
+chmod +x ./main.py
+```
 
 ### Установить виртуальную среду со всеми зависимостями 
 
 ### для linux и macos 
-```python3 -m venv venv
-source venv/bin/activate```
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
 
 ### Устанавливаем зависимости в виртуальную среду 
-```pip -r install requirements.txt```
+```bash
+pip -r install requirements.txt
+```
 
 
 ### Чтобы скрипт работал как даемон (ubuntu linux)
 
 #### прописываем в main.py первой строчкой путь до виртуальной среды в которой запускается скрипт
 
-```#!/home/username/path_to_env/venv/bin/python
-code ...```
+```bash
+#!/home/username/path_to_env/venv/bin/python
+code ...
+```
 
 ### после этого делаем его как даемон 
+
+не указано пока
