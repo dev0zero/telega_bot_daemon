@@ -20,4 +20,4 @@ source venv/bin/activate```
 ```#!/home/username/path_to_env/venv/bin/python
 code ...```
 
-### после этого
+### после этого делаем его как даемон 
