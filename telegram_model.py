@@ -42,7 +42,8 @@ class TelegramModel:
 
         # проверяем есть ли вообще чат в списке
         if chat.id not in ids_chats:# or chat_username not in chat_names:
-            print("chat id is not in allowed list ids")
+            if c.DEBUG:
+                print("chat id is not in allowed list ids")
             return result
         else:
             # пропускаем проверку, если не нужно исполнять команду
@@ -58,7 +59,8 @@ class TelegramModel:
 
         # Данная проверка нужна для чатов в которые не нужно вообще светить команды
         if sender_id is None:
-            print("user is not in admins list")
+            if c.DEBUG:
+                print("user is not in admins list")
         else:
             for key, value in admin_list.items():
                 if value.get('user_id') == sender_id:
@@ -79,7 +81,8 @@ class TelegramModel:
 
         # Глушим все исполнения от всех пользователей и чатов с установкой Гость!
         if result["chat_level"] == privileges_list['Guest']:
-            print('User or Chat is unknown it is -> Guest quit')
+            if c.DEBUG:
+                print('User or Chat is unknown it is -> Guest quit')
             return result
 
         # TODO: посмотреть как это работает
@@ -156,8 +159,8 @@ class TelegramModel:
 
     async def search_user(self, event, db):
         result = {
-            'err_message': None,
-            'user_name': None,
+            'err_message': "",
+            'user_name': "",
         }
         text = event.raw_text
         found_user = None
@@ -178,8 +181,8 @@ class TelegramModel:
             else:
                 raise Exception('Не определен пользователь')
         except Exception as e:
-            error = f"Ошибка {e}"
-            result['err_message'] = error
+            err = f"Ошибка {e}"
+            result['err_message'] = err
         finally:
             pass
         return result

@@ -324,7 +324,7 @@ class TelegramWatcher:
 
                     print("Реакция:", emoji)
                     print("Количество:", reaction.count)
-                    print("Я поставил?:", reaction.chosen)
+                    print("Я поставил?:", reaction.reaction)
 
         print("🚀 Бот запущен. Ожидаем сообщения...")
 
